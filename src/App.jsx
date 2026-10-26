@@ -84,14 +84,29 @@ const setLocalCache = (key, value) => {
   }
 };
 
-// 入力途中データ（下書き）のキャッシュヘルパー（スマホの画面オフ・スリープ・再読み込み対策）
+// 入力途中データ（下書き）のキャッシュヘルパー（iPhone/Androidの画面オフ・スリープ・再読み込み対策）
 const DRAFT_KEY = 'kakeibo_input_draft';
-const getInputDraft = () => getLocalCache(DRAFT_KEY, null);
-const setInputDraft = (val) => setLocalCache(DRAFT_KEY, val);
-const clearInputDraft = () => {
+const getInputDraft = () => {
   try {
-    localStorage.removeItem(DRAFT_KEY);
+    const local = localStorage.getItem(DRAFT_KEY);
+    if (local) return JSON.parse(local);
   } catch (e) {}
+  try {
+    const session = sessionStorage.getItem(DRAFT_KEY);
+    if (session) return JSON.parse(session);
+  } catch (e) {}
+  return null;
+};
+
+const setInputDraft = (val) => {
+  const str = JSON.stringify(val);
+  try { localStorage.setItem(DRAFT_KEY, str); } catch (e) {}
+  try { sessionStorage.setItem(DRAFT_KEY, str); } catch (e) {}
+};
+
+const clearInputDraft = () => {
+  try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+  try { sessionStorage.removeItem(DRAFT_KEY); } catch (e) {}
 };
 
 export default function App() {
@@ -377,36 +392,123 @@ export default function App() {
 
     const [type, setType] = useState(() => draft.type || 'expense');
     const [amount, setAmount] = useState(() => draft.amount || '');
-    const handleAmountChange = (e) => {
-      const rawVal = e.target.value.replace(/[^0-9]/g, '');
-      setAmount(rawVal);
-    };
     const [date, setDate] = useState(() => draft.date || today.toISOString().split('T')[0]);
-    
-    // 入力用のカテゴリ状態。親を選んだ状態と、さらに子を選んだ状態を管理
     const [selectedParentId, setSelectedParentId] = useState(() => draft.selectedParentId || '');
     const [selectedSubId, setSelectedSubId] = useState(() => draft.selectedSubId || '');
-    
     const [memo, setMemo] = useState(() => draft.memo || '');
     const [editingId, setEditingId] = useState(() => draft.editingId || null);
 
-    // 入力中の内容をローカルストレージに自動保存（画面オフ・スリープ・再読み込み対策）
+    // イベントリスナー内で常に最新のフォーム値を参照するための ref
+    const formStateRef = useRef({
+      type,
+      amount,
+      date,
+      selectedParentId,
+      selectedSubId,
+      memo,
+      editingId
+    });
+
     useEffect(() => {
-      const hasContent = amount || memo || selectedParentId || selectedSubId || editingId || (type !== 'expense');
-      if (hasContent) {
-        setInputDraft({
-          type,
-          amount,
-          date,
-          selectedParentId,
-          selectedSubId,
-          memo,
-          editingId
-        });
-      } else {
-        clearInputDraft();
-      }
+      formStateRef.current = {
+        type,
+        amount,
+        date,
+        selectedParentId,
+        selectedSubId,
+        memo,
+        editingId
+      };
     }, [type, amount, date, selectedParentId, selectedSubId, memo, editingId]);
+
+    // 即時同期保存（iPhoneの画面オフ直前に即時反映させるため）
+    const saveDraftImmediate = (updates = {}) => {
+      const current = { ...formStateRef.current, ...updates };
+      const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
+      if (hasContent) {
+        setInputDraft(current);
+      }
+    };
+
+    const handleAmountChange = (e) => {
+      const rawVal = e.target.value.replace(/[^0-9]/g, '');
+      setAmount(rawVal);
+      saveDraftImmediate({ amount: rawVal });
+    };
+
+    const handleMemoChange = (e) => {
+      const val = e.target.value;
+      setMemo(val);
+      saveDraftImmediate({ memo: val });
+    };
+
+    const handleDateChange = (e) => {
+      const val = e.target.value;
+      setDate(val);
+      saveDraftImmediate({ date: val });
+    };
+
+    const handleTypeChange = (newType) => {
+      setType(newType);
+      setSelectedParentId('');
+      setSelectedSubId('');
+      saveDraftImmediate({ type: newType, selectedParentId: '', selectedSubId: '' });
+    };
+
+    const handleParentSelect = (catId) => {
+      setSelectedParentId(catId);
+      setSelectedSubId('');
+      saveDraftImmediate({ selectedParentId: catId, selectedSubId: '' });
+    };
+
+    const handleSubSelect = (subId) => {
+      setSelectedSubId(subId);
+      saveDraftImmediate({ selectedSubId: subId });
+    };
+
+    // iPhoneのスリープ（画面オフ）・復帰（画面オン）を検知して確実に保存＆復元
+    useEffect(() => {
+      const restoreDraft = () => {
+        const saved = getInputDraft();
+        if (saved) {
+          if (saved.amount !== undefined) setAmount(saved.amount);
+          if (saved.memo !== undefined) setMemo(saved.memo);
+          if (saved.type !== undefined) setType(saved.type);
+          if (saved.date !== undefined) setDate(saved.date);
+          if (saved.selectedParentId !== undefined) setSelectedParentId(saved.selectedParentId);
+          if (saved.selectedSubId !== undefined) setSelectedSubId(saved.selectedSubId);
+          if (saved.editingId !== undefined) setEditingId(saved.editingId);
+        }
+      };
+
+      const saveCurrent = () => {
+        const current = formStateRef.current;
+        const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
+        if (hasContent) {
+          setInputDraft(current);
+        }
+      };
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'hidden') {
+          saveCurrent();
+        } else if (document.visibilityState === 'visible') {
+          restoreDraft();
+        }
+      };
+
+      window.addEventListener('pagehide', saveCurrent);
+      window.addEventListener('beforeunload', saveCurrent);
+      window.addEventListener('pageshow', restoreDraft);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        window.removeEventListener('pagehide', saveCurrent);
+        window.removeEventListener('beforeunload', saveCurrent);
+        window.removeEventListener('pageshow', restoreDraft);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
+    }, []);
 
     const availableParents = activeParentCategories.filter(c => c.type === type);
     const availableSubs = selectedParentId ? getActiveSubCategories(selectedParentId) : [];
@@ -545,14 +647,14 @@ export default function App() {
             <button
               type="button"
               className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${type === 'expense' ? 'bg-white text-rose-500 shadow-sm' : 'text-gray-400'}`}
-              onClick={() => { setType('expense'); setSelectedParentId(''); setSelectedSubId(''); }}
+              onClick={() => handleTypeChange('expense')}
             >
               支出
             </button>
             <button
               type="button"
               className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${type === 'income' ? 'bg-white text-teal-500 shadow-sm' : 'text-gray-400'}`}
-              onClick={() => { setType('income'); setSelectedParentId(''); setSelectedSubId(''); }}
+              onClick={() => handleTypeChange('income')}
             >
               収入
             </button>
@@ -561,7 +663,7 @@ export default function App() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">日付</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required
+              <input type="date" value={date} onChange={handleDateChange} required
                 className="w-full bg-gray-50 border-none rounded-2xl p-3 text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none font-bold" />
             </div>
 
@@ -596,10 +698,7 @@ export default function App() {
                     const isSelected = selectedParentId === cat.id;
                     return (
                       <button type="button" key={cat.id} 
-                        onClick={() => {
-                          setSelectedParentId(cat.id);
-                          setSelectedSubId(''); // 親を変えたら子はリセット
-                        }}
+                        onClick={() => handleParentSelect(cat.id)}
                         className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all ${isSelected ? 'bg-orange-100 ring-2 ring-orange-300' : 'bg-gray-50 hover:bg-gray-100'}`}
                       >
                         <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1 text-white" style={{ backgroundColor: cat.color }}>
@@ -621,7 +720,7 @@ export default function App() {
                       const isSelected = selectedSubId === sub.id;
                       return (
                         <button type="button" key={sub.id}
-                          onClick={() => setSelectedSubId(sub.id)}
+                          onClick={() => handleSubSelect(sub.id)}
                           className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${isSelected ? 'bg-orange-400 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-orange-100'}`}
                         >
                           {sub.name}
@@ -635,7 +734,7 @@ export default function App() {
 
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">メモ (任意)</label>
-              <input type="text" value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="スーパーなど..."
+              <input type="text" value={memo} onChange={handleMemoChange} placeholder="スーパーなど..."
                 className="w-full bg-gray-50 border-none rounded-2xl p-3 text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none text-sm" />
             </div>
 
