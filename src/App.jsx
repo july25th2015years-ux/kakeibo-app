@@ -84,6 +84,16 @@ const setLocalCache = (key, value) => {
   }
 };
 
+// 入力途中データ（下書き）のキャッシュヘルパー（スマホの画面オフ・スリープ・再読み込み対策）
+const DRAFT_KEY = 'kakeibo_input_draft';
+const getInputDraft = () => getLocalCache(DRAFT_KEY, null);
+const setInputDraft = (val) => setLocalCache(DRAFT_KEY, val);
+const clearInputDraft = () => {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch (e) {}
+};
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -363,20 +373,40 @@ export default function App() {
   }
 
   const InputScreen = () => {
-    const [type, setType] = useState('expense');
-    const [amount, setAmount] = useState('');
+    const draft = useMemo(() => getInputDraft() || {}, []);
+
+    const [type, setType] = useState(() => draft.type || 'expense');
+    const [amount, setAmount] = useState(() => draft.amount || '');
     const handleAmountChange = (e) => {
       const rawVal = e.target.value.replace(/[^0-9]/g, '');
       setAmount(rawVal);
     };
-    const [date, setDate] = useState(today.toISOString().split('T')[0]);
+    const [date, setDate] = useState(() => draft.date || today.toISOString().split('T')[0]);
     
     // 入力用のカテゴリ状態。親を選んだ状態と、さらに子を選んだ状態を管理
-    const [selectedParentId, setSelectedParentId] = useState('');
-    const [selectedSubId, setSelectedSubId] = useState('');
+    const [selectedParentId, setSelectedParentId] = useState(() => draft.selectedParentId || '');
+    const [selectedSubId, setSelectedSubId] = useState(() => draft.selectedSubId || '');
     
-    const [memo, setMemo] = useState('');
-    const [editingId, setEditingId] = useState(null);
+    const [memo, setMemo] = useState(() => draft.memo || '');
+    const [editingId, setEditingId] = useState(() => draft.editingId || null);
+
+    // 入力中の内容をローカルストレージに自動保存（画面オフ・スリープ・再読み込み対策）
+    useEffect(() => {
+      const hasContent = amount || memo || selectedParentId || selectedSubId || editingId || (type !== 'expense');
+      if (hasContent) {
+        setInputDraft({
+          type,
+          amount,
+          date,
+          selectedParentId,
+          selectedSubId,
+          memo,
+          editingId
+        });
+      } else {
+        clearInputDraft();
+      }
+    }, [type, amount, date, selectedParentId, selectedSubId, memo, editingId]);
 
     const availableParents = activeParentCategories.filter(c => c.type === type);
     const availableSubs = selectedParentId ? getActiveSubCategories(selectedParentId) : [];
@@ -425,6 +455,7 @@ export default function App() {
       setMemo('');
       setSelectedParentId('');
       setSelectedSubId('');
+      clearInputDraft();
     };
 
     const handleSubmit = async (e) => {
@@ -455,6 +486,7 @@ export default function App() {
         setAmount('');
         setMemo('');
         setSelectedSubId('');
+        clearInputDraft();
 
         // 入力完了後に下部のリスト表示部分へスクロール
         const scrollToTarget = () => {
@@ -486,6 +518,7 @@ export default function App() {
       showConfirm("この記録を削除してもよろしいですか？", async () => {
         await deleteDoc(doc(db, `${getBasePath()}/transactions/${id}`));
         if (editingId === id) handleCancelEdit();
+        clearInputDraft();
         closeConfirm();
       });
     };
