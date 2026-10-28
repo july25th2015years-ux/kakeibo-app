@@ -390,6 +390,9 @@ export default function App() {
   const InputScreen = () => {
     const draft = useMemo(() => getInputDraft() || {}, []);
 
+    const [formKey, setFormKey] = useState(0);
+    const isResettingRef = useRef(false);
+
     const [type, setType] = useState(() => draft.type || 'expense');
     const [amount, setAmount] = useState(() => draft.amount || '');
     const [date, setDate] = useState(() => draft.date || today.toISOString().split('T')[0]);
@@ -423,6 +426,7 @@ export default function App() {
 
     // 即時同期保存（iPhoneの画面オフ直前に即時反映させるため）
     const saveDraftImmediate = (updates = {}) => {
+      if (isResettingRef.current) return;
       const current = { ...formStateRef.current, ...updates };
       const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
       if (hasContent) {
@@ -469,6 +473,7 @@ export default function App() {
     // iPhoneのスリープ（画面オフ）・復帰（画面オン）を検知して確実に保存＆復元
     useEffect(() => {
       const restoreDraft = () => {
+        if (isResettingRef.current) return;
         const saved = getInputDraft();
         if (saved) {
           if (saved.amount !== undefined) setAmount(saved.amount);
@@ -482,6 +487,7 @@ export default function App() {
       };
 
       const saveCurrent = () => {
+        if (isResettingRef.current) return;
         const current = formStateRef.current;
         const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
         if (hasContent) {
@@ -552,6 +558,8 @@ export default function App() {
     }, []);
 
     const resetInputForm = () => {
+      isResettingRef.current = true;
+      clearInputDraft();
       setAmount('');
       setMemo('');
       setSelectedParentId('');
@@ -568,7 +576,11 @@ export default function App() {
         memo: '',
         editingId: null
       };
-      clearInputDraft();
+      setFormKey(k => k + 1);
+      setTimeout(() => {
+        clearInputDraft();
+        isResettingRef.current = false;
+      }, 500);
     };
 
     const handleCancelEdit = () => {
@@ -642,7 +654,7 @@ export default function App() {
     return (
       <div className="pb-24 pt-4 px-4 max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4">
         {/* 入力フォーム */}
-        <div className={`bg-white rounded-3xl shadow-sm border p-5 mb-6 transition-all ${editingId ? 'border-orange-400 shadow-orange-100 ring-4 ring-orange-50' : 'border-orange-100'}`}>
+        <div key={formKey} className={`bg-white rounded-3xl shadow-sm border p-5 mb-6 transition-all ${editingId ? 'border-orange-400 shadow-orange-100 ring-4 ring-orange-50' : 'border-orange-100'}`}>
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-gray-700 flex items-center gap-2">
               <Edit3 size={18} className={editingId ? 'text-orange-500' : 'text-orange-400'}/> 
