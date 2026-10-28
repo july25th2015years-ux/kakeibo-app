@@ -142,6 +142,121 @@ export default function App() {
   const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   const currentYearStr = String(today.getFullYear());
 
+  // 入力フォームの状態をAppレベルで管理（再レンダリングやアンマウントによる意図しない状態消失を防止）
+  const inputDraft = useMemo(() => getInputDraft() || {}, []);
+
+  const [inputType, setInputType] = useState(() => inputDraft.type || 'expense');
+  const [inputAmount, setInputAmount] = useState(() => inputDraft.amount || '');
+  const [inputDate, setInputDate] = useState(() => inputDraft.date || today.toISOString().split('T')[0]);
+  const [inputParentId, setInputParentId] = useState(() => inputDraft.selectedParentId || '');
+  const [inputSubId, setInputSubId] = useState(() => inputDraft.selectedSubId || '');
+  const [inputMemo, setInputMemo] = useState(() => inputDraft.memo || '');
+  const [inputEditingId, setInputEditingId] = useState(() => inputDraft.editingId || null);
+
+  const formStateRef = useRef({
+    type: inputType,
+    amount: inputAmount,
+    date: inputDate,
+    selectedParentId: inputParentId,
+    selectedSubId: inputSubId,
+    memo: inputMemo,
+    editingId: inputEditingId
+  });
+
+  useEffect(() => {
+    formStateRef.current = {
+      type: inputType,
+      amount: inputAmount,
+      date: inputDate,
+      selectedParentId: inputParentId,
+      selectedSubId: inputSubId,
+      memo: inputMemo,
+      editingId: inputEditingId
+    };
+  }, [inputType, inputAmount, inputDate, inputParentId, inputSubId, inputMemo, inputEditingId]);
+
+  const isResettingRef = useRef(false);
+
+  const saveDraftImmediate = (updates = {}) => {
+    if (isResettingRef.current) return;
+    const current = { ...formStateRef.current, ...updates };
+    const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
+    if (hasContent) {
+      setInputDraft(current);
+    }
+  };
+
+  const resetInputForm = () => {
+    isResettingRef.current = true;
+    clearInputDraft();
+    setInputAmount('');
+    setInputMemo('');
+    setInputParentId('');
+    setInputSubId('');
+    setInputDate(today.toISOString().split('T')[0]);
+    setInputType('expense');
+    setInputEditingId(null);
+    formStateRef.current = {
+      type: 'expense',
+      amount: '',
+      date: today.toISOString().split('T')[0],
+      selectedParentId: '',
+      selectedSubId: '',
+      memo: '',
+      editingId: null
+    };
+    setTimeout(() => {
+      clearInputDraft();
+      isResettingRef.current = false;
+    }, 300);
+  };
+
+  // iPhone/スマホのスリープ・復帰時の一時保存・強制復元リスナー（Appレベルで永続管理）
+  useEffect(() => {
+    const restoreDraft = () => {
+      if (isResettingRef.current) return;
+      const saved = getInputDraft();
+      if (saved) {
+        if (saved.amount !== undefined) setInputAmount(saved.amount);
+        if (saved.memo !== undefined) setInputMemo(saved.memo);
+        if (saved.type !== undefined) setInputType(saved.type);
+        if (saved.date !== undefined) setInputDate(saved.date);
+        if (saved.selectedParentId !== undefined) setInputParentId(saved.selectedParentId);
+        if (saved.selectedSubId !== undefined) setInputSubId(saved.selectedSubId);
+        if (saved.editingId !== undefined) setInputEditingId(saved.editingId);
+      }
+    };
+
+    const saveCurrent = () => {
+      if (isResettingRef.current) return;
+      const current = formStateRef.current;
+      const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
+      if (hasContent) {
+        setInputDraft(current);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        saveCurrent();
+      } else if (document.visibilityState === 'visible') {
+        restoreDraft();
+      }
+    };
+
+    window.addEventListener('pagehide', saveCurrent);
+    window.addEventListener('beforeunload', saveCurrent);
+    window.addEventListener('pageshow', restoreDraft);
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      window.removeEventListener('pagehide', saveCurrent);
+      window.removeEventListener('beforeunload', saveCurrent);
+      window.removeEventListener('pageshow', restoreDraft);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
   const handleLogin = async () => {
     try {
       await signInWithPopup(auth, googleProvider);
@@ -388,133 +503,50 @@ export default function App() {
   }
 
   const InputScreen = () => {
-    const draft = useMemo(() => getInputDraft() || {}, []);
-
-    const [formKey, setFormKey] = useState(0);
-    const isResettingRef = useRef(false);
-
-    const [type, setType] = useState(() => draft.type || 'expense');
-    const [amount, setAmount] = useState(() => draft.amount || '');
-    const [date, setDate] = useState(() => draft.date || today.toISOString().split('T')[0]);
-    const [selectedParentId, setSelectedParentId] = useState(() => draft.selectedParentId || '');
-    const [selectedSubId, setSelectedSubId] = useState(() => draft.selectedSubId || '');
-    const [memo, setMemo] = useState(() => draft.memo || '');
-    const [editingId, setEditingId] = useState(() => draft.editingId || null);
-
-    // イベントリスナー内で常に最新のフォーム値を参照するための ref
-    const formStateRef = useRef({
-      type,
-      amount,
-      date,
-      selectedParentId,
-      selectedSubId,
-      memo,
-      editingId
-    });
-
-    useEffect(() => {
-      formStateRef.current = {
-        type,
-        amount,
-        date,
-        selectedParentId,
-        selectedSubId,
-        memo,
-        editingId
-      };
-    }, [type, amount, date, selectedParentId, selectedSubId, memo, editingId]);
-
-    // 即時同期保存（iPhoneの画面オフ直前に即時反映させるため）
-    const saveDraftImmediate = (updates = {}) => {
-      if (isResettingRef.current) return;
-      const current = { ...formStateRef.current, ...updates };
-      const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
-      if (hasContent) {
-        setInputDraft(current);
-      }
-    };
+    // 親Appレベルの入力状態・ハンドラーを参照
+    const type = inputType;
+    const amount = inputAmount;
+    const date = inputDate;
+    const selectedParentId = inputParentId;
+    const selectedSubId = inputSubId;
+    const memo = inputMemo;
+    const editingId = inputEditingId;
 
     const handleAmountChange = (e) => {
       const rawVal = e.target.value.replace(/[^0-9]/g, '');
-      setAmount(rawVal);
+      setInputAmount(rawVal);
       saveDraftImmediate({ amount: rawVal });
     };
 
     const handleMemoChange = (e) => {
       const val = e.target.value;
-      setMemo(val);
+      setInputMemo(val);
       saveDraftImmediate({ memo: val });
     };
 
     const handleDateChange = (e) => {
       const val = e.target.value;
-      setDate(val);
+      setInputDate(val);
       saveDraftImmediate({ date: val });
     };
 
     const handleTypeChange = (newType) => {
-      setType(newType);
-      setSelectedParentId('');
-      setSelectedSubId('');
+      setInputType(newType);
+      setInputParentId('');
+      setInputSubId('');
       saveDraftImmediate({ type: newType, selectedParentId: '', selectedSubId: '' });
     };
 
     const handleParentSelect = (catId) => {
-      setSelectedParentId(catId);
-      setSelectedSubId('');
+      setInputParentId(catId);
+      setInputSubId('');
       saveDraftImmediate({ selectedParentId: catId, selectedSubId: '' });
     };
 
     const handleSubSelect = (subId) => {
-      setSelectedSubId(subId);
+      setInputSubId(subId);
       saveDraftImmediate({ selectedSubId: subId });
     };
-
-    // iPhoneのスリープ（画面オフ）・復帰（画面オン）を検知して確実に保存＆復元
-    useEffect(() => {
-      const restoreDraft = () => {
-        if (isResettingRef.current) return;
-        const saved = getInputDraft();
-        if (saved) {
-          if (saved.amount !== undefined) setAmount(saved.amount);
-          if (saved.memo !== undefined) setMemo(saved.memo);
-          if (saved.type !== undefined) setType(saved.type);
-          if (saved.date !== undefined) setDate(saved.date);
-          if (saved.selectedParentId !== undefined) setSelectedParentId(saved.selectedParentId);
-          if (saved.selectedSubId !== undefined) setSelectedSubId(saved.selectedSubId);
-          if (saved.editingId !== undefined) setEditingId(saved.editingId);
-        }
-      };
-
-      const saveCurrent = () => {
-        if (isResettingRef.current) return;
-        const current = formStateRef.current;
-        const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
-        if (hasContent) {
-          setInputDraft(current);
-        }
-      };
-
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'hidden') {
-          saveCurrent();
-        } else if (document.visibilityState === 'visible') {
-          restoreDraft();
-        }
-      };
-
-      window.addEventListener('pagehide', saveCurrent);
-      window.addEventListener('beforeunload', saveCurrent);
-      window.addEventListener('pageshow', restoreDraft);
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-
-      return () => {
-        window.removeEventListener('pagehide', saveCurrent);
-        window.removeEventListener('beforeunload', saveCurrent);
-        window.removeEventListener('pageshow', restoreDraft);
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
-    }, []);
 
     const availableParents = activeParentCategories.filter(c => c.type === type);
     const availableSubs = selectedParentId ? getActiveSubCategories(selectedParentId) : [];
@@ -527,25 +559,26 @@ export default function App() {
     const changeCalMonth = (offset) => {
       const d = new Date(calYear, calMonth - 1 + offset, 1);
       const newDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      setDate(newDateStr);
+      setInputDate(newDateStr);
+      saveDraftImmediate({ date: newDateStr });
     };
 
     const handleEditClick = (tx) => {
-      setEditingId(tx.id);
-      setType(tx.type);
-      setAmount(String(tx.amount));
-      setDate(tx.date);
-      setMemo(tx.memo || '');
+      setInputEditingId(tx.id);
+      setInputType(tx.type);
+      setInputAmount(String(tx.amount));
+      setInputDate(tx.date);
+      setInputMemo(tx.memo || '');
       
       const pId = getParentId(tx.categoryId);
       if (pId !== tx.categoryId) {
         // サブカテゴリが記録されていた場合
-        setSelectedParentId(pId);
-        setSelectedSubId(tx.categoryId);
+        setInputParentId(pId);
+        setInputSubId(tx.categoryId);
       } else {
         // 親カテゴリのみ記録されていた場合
-        setSelectedParentId(tx.categoryId);
-        setSelectedSubId('');
+        setInputParentId(tx.categoryId);
+        setInputSubId('');
       }
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -556,32 +589,6 @@ export default function App() {
         txToEditRef.current = null;
       }
     }, []);
-
-    const resetInputForm = () => {
-      isResettingRef.current = true;
-      clearInputDraft();
-      setAmount('');
-      setMemo('');
-      setSelectedParentId('');
-      setSelectedSubId('');
-      setDate(today.toISOString().split('T')[0]);
-      setType('expense');
-      setEditingId(null);
-      formStateRef.current = {
-        type: 'expense',
-        amount: '',
-        date: today.toISOString().split('T')[0],
-        selectedParentId: '',
-        selectedSubId: '',
-        memo: '',
-        editingId: null
-      };
-      setFormKey(k => k + 1);
-      setTimeout(() => {
-        clearInputDraft();
-        isResettingRef.current = false;
-      }, 500);
-    };
 
     const handleCancelEdit = () => {
       resetInputForm();
@@ -602,10 +609,16 @@ export default function App() {
         updatedAt: new Date().toISOString()
       };
 
+      const currentEditingId = editingId;
+      const savedDate = date;
+
+      // 重要: setDoc を実行する前にリセットを実行し、親のStateおよびストレージを即時クリアする。
+      // これにより、setDoc 完了に伴う onSnapshot 再レンダリング時にもフォームは既にリセット状態となる。
+      resetInputForm();
+
       try {
-        const savedDate = date;
-        if (editingId) {
-          await setDoc(doc(db, `${getBasePath()}/transactions/${editingId}`), txData, { merge: true });
+        if (currentEditingId) {
+          await setDoc(doc(db, `${getBasePath()}/transactions/${currentEditingId}`), txData, { merge: true });
         } else {
           const txId = crypto.randomUUID();
           txData.createdAt = new Date().toISOString();
@@ -654,7 +667,7 @@ export default function App() {
     return (
       <div className="pb-24 pt-4 px-4 max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4">
         {/* 入力フォーム */}
-        <div key={formKey} className={`bg-white rounded-3xl shadow-sm border p-5 mb-6 transition-all ${editingId ? 'border-orange-400 shadow-orange-100 ring-4 ring-orange-50' : 'border-orange-100'}`}>
+        <div className={`bg-white rounded-3xl shadow-sm border p-5 mb-6 transition-all ${editingId ? 'border-orange-400 shadow-orange-100 ring-4 ring-orange-50' : 'border-orange-100'}`}>
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-gray-700 flex items-center gap-2">
               <Edit3 size={18} className={editingId ? 'text-orange-500' : 'text-orange-400'}/> 
