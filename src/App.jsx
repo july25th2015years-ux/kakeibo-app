@@ -142,120 +142,6 @@ export default function App() {
   const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   const currentYearStr = String(today.getFullYear());
 
-  // 入力フォームの状態をAppレベルで管理（再レンダリングやアンマウントによる意図しない状態消失を防止）
-  const inputDraft = useMemo(() => getInputDraft() || {}, []);
-
-  const [inputType, setInputType] = useState(() => inputDraft.type || 'expense');
-  const [inputAmount, setInputAmount] = useState(() => inputDraft.amount || '');
-  const [inputDate, setInputDate] = useState(() => inputDraft.date || today.toISOString().split('T')[0]);
-  const [inputParentId, setInputParentId] = useState(() => inputDraft.selectedParentId || '');
-  const [inputSubId, setInputSubId] = useState(() => inputDraft.selectedSubId || '');
-  const [inputMemo, setInputMemo] = useState(() => inputDraft.memo || '');
-  const [inputEditingId, setInputEditingId] = useState(() => inputDraft.editingId || null);
-
-  const formStateRef = useRef({
-    type: inputType,
-    amount: inputAmount,
-    date: inputDate,
-    selectedParentId: inputParentId,
-    selectedSubId: inputSubId,
-    memo: inputMemo,
-    editingId: inputEditingId
-  });
-
-  useEffect(() => {
-    formStateRef.current = {
-      type: inputType,
-      amount: inputAmount,
-      date: inputDate,
-      selectedParentId: inputParentId,
-      selectedSubId: inputSubId,
-      memo: inputMemo,
-      editingId: inputEditingId
-    };
-  }, [inputType, inputAmount, inputDate, inputParentId, inputSubId, inputMemo, inputEditingId]);
-
-  const isResettingRef = useRef(false);
-
-  const saveDraftImmediate = (updates = {}) => {
-    if (isResettingRef.current) return;
-    const current = { ...formStateRef.current, ...updates };
-    const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
-    if (hasContent) {
-      setInputDraft(current);
-    }
-  };
-
-  const resetInputForm = () => {
-    isResettingRef.current = true;
-    clearInputDraft();
-    setInputAmount('');
-    setInputMemo('');
-    setInputParentId('');
-    setInputSubId('');
-    setInputDate(today.toISOString().split('T')[0]);
-    setInputType('expense');
-    setInputEditingId(null);
-    formStateRef.current = {
-      type: 'expense',
-      amount: '',
-      date: today.toISOString().split('T')[0],
-      selectedParentId: '',
-      selectedSubId: '',
-      memo: '',
-      editingId: null
-    };
-    setTimeout(() => {
-      clearInputDraft();
-      isResettingRef.current = false;
-    }, 300);
-  };
-
-  // iPhone/スマホのスリープ・復帰時の一時保存・強制復元リスナー（Appレベルで永続管理）
-  useEffect(() => {
-    const restoreDraft = () => {
-      if (isResettingRef.current) return;
-      const saved = getInputDraft();
-      if (saved) {
-        if (saved.amount !== undefined) setInputAmount(saved.amount);
-        if (saved.memo !== undefined) setInputMemo(saved.memo);
-        if (saved.type !== undefined) setInputType(saved.type);
-        if (saved.date !== undefined) setInputDate(saved.date);
-        if (saved.selectedParentId !== undefined) setInputParentId(saved.selectedParentId);
-        if (saved.selectedSubId !== undefined) setInputSubId(saved.selectedSubId);
-        if (saved.editingId !== undefined) setInputEditingId(saved.editingId);
-      }
-    };
-
-    const saveCurrent = () => {
-      if (isResettingRef.current) return;
-      const current = formStateRef.current;
-      const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
-      if (hasContent) {
-        setInputDraft(current);
-      }
-    };
-
-    const handleVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        saveCurrent();
-      } else if (document.visibilityState === 'visible') {
-        restoreDraft();
-      }
-    };
-
-    window.addEventListener('pagehide', saveCurrent);
-    window.addEventListener('beforeunload', saveCurrent);
-    window.addEventListener('pageshow', restoreDraft);
-    document.addEventListener('visibilitychange', handleVisibility);
-
-    return () => {
-      window.removeEventListener('pagehide', saveCurrent);
-      window.removeEventListener('beforeunload', saveCurrent);
-      window.removeEventListener('pageshow', restoreDraft);
-      document.removeEventListener('visibilitychange', handleVisibility);
-    };
-  }, []);
 
   const handleLogin = async () => {
     try {
@@ -502,435 +388,7 @@ export default function App() {
     );
   }
 
-  const InputScreen = () => {
-    // 親Appレベルの入力状態・ハンドラーを参照
-    const type = inputType;
-    const amount = inputAmount;
-    const date = inputDate;
-    const selectedParentId = inputParentId;
-    const selectedSubId = inputSubId;
-    const memo = inputMemo;
-    const editingId = inputEditingId;
 
-    const handleAmountChange = (e) => {
-      const rawVal = e.target.value.replace(/[^0-9]/g, '');
-      setInputAmount(rawVal);
-      saveDraftImmediate({ amount: rawVal });
-    };
-
-    const handleMemoChange = (e) => {
-      const val = e.target.value;
-      setInputMemo(val);
-      saveDraftImmediate({ memo: val });
-    };
-
-    const handleDateChange = (e) => {
-      const val = e.target.value;
-      setInputDate(val);
-      saveDraftImmediate({ date: val });
-    };
-
-    const handleTypeChange = (newType) => {
-      setInputType(newType);
-      setInputParentId('');
-      setInputSubId('');
-      saveDraftImmediate({ type: newType, selectedParentId: '', selectedSubId: '' });
-    };
-
-    const handleParentSelect = (catId) => {
-      setInputParentId(catId);
-      setInputSubId('');
-      saveDraftImmediate({ selectedParentId: catId, selectedSubId: '' });
-    };
-
-    const handleSubSelect = (subId) => {
-      setInputSubId(subId);
-      saveDraftImmediate({ selectedSubId: subId });
-    };
-
-    const availableParents = activeParentCategories.filter(c => c.type === type);
-    const availableSubs = selectedParentId ? getActiveSubCategories(selectedParentId) : [];
-
-    const calDate = parseSafeDate(date);
-    const calYear = calDate.getFullYear();
-    const calMonth = calDate.getMonth() + 1;
-    const calendarDays = generateCalendar(calYear, calMonth);
-
-    const changeCalMonth = (offset) => {
-      const d = new Date(calYear, calMonth - 1 + offset, 1);
-      const newDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-      setInputDate(newDateStr);
-      saveDraftImmediate({ date: newDateStr });
-    };
-
-    const handleEditClick = (tx) => {
-      setInputEditingId(tx.id);
-      setInputType(tx.type);
-      setInputAmount(String(tx.amount));
-      setInputDate(tx.date);
-      setInputMemo(tx.memo || '');
-      
-      const pId = getParentId(tx.categoryId);
-      if (pId !== tx.categoryId) {
-        // サブカテゴリが記録されていた場合
-        setInputParentId(pId);
-        setInputSubId(tx.categoryId);
-      } else {
-        // 親カテゴリのみ記録されていた場合
-        setInputParentId(tx.categoryId);
-        setInputSubId('');
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
-
-    useEffect(() => {
-      if (txToEditRef.current) {
-        handleEditClick(txToEditRef.current);
-        txToEditRef.current = null;
-      }
-    }, []);
-
-    const handleCancelEdit = () => {
-      resetInputForm();
-    };
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      // サブが選ばれていればサブを、選ばれていなければ親を最終的なカテゴリIDとする
-      const finalCategoryId = selectedSubId || selectedParentId;
-      if (!amount || !finalCategoryId || !date) return;
-      
-      const txData = {
-        amount: parseInt(amount, 10),
-        date,
-        categoryId: finalCategoryId,
-        memo,
-        type,
-        updatedAt: new Date().toISOString()
-      };
-
-      const currentEditingId = editingId;
-      const savedDate = date;
-
-      // 重要: setDoc を実行する前にリセットを実行し、親のStateおよびストレージを即時クリアする。
-      // これにより、setDoc 完了に伴う onSnapshot 再レンダリング時にもフォームは既にリセット状態となる。
-      resetInputForm();
-
-      try {
-        if (currentEditingId) {
-          await setDoc(doc(db, `${getBasePath()}/transactions/${currentEditingId}`), txData, { merge: true });
-        } else {
-          const txId = crypto.randomUUID();
-          txData.createdAt = new Date().toISOString();
-          await setDoc(doc(db, `${getBasePath()}/transactions/${txId}`), txData);
-        }
-
-        // 登録完了後にすべての入力内容と下書きを完全にリセット
-        resetInputForm();
-
-        // 入力完了後に下部のリスト表示部分へスクロール
-        const scrollToTarget = () => {
-          const dateEl = document.getElementById(`tx-list-${savedDate}`);
-          if (dateEl) {
-            dateEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            return true;
-          }
-          return false;
-        };
-
-        setTimeout(() => {
-          const found = scrollToTarget();
-          if (!found) {
-            const sectionEl = document.getElementById('tx-records-section');
-            if (sectionEl) {
-              sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-            setTimeout(scrollToTarget, 200);
-          }
-        }, 100);
-      } catch (err) {
-        console.error("保存エラー", err);
-        alert("保存に失敗しました");
-      }
-    };
-
-    const handleDelete = (id) => {
-      showConfirm("この記録を削除してもよろしいですか？", async () => {
-        await deleteDoc(doc(db, `${getBasePath()}/transactions/${id}`));
-        if (editingId === id) resetInputForm();
-        closeConfirm();
-      });
-    };
-
-    const selectedDayTx = transactions.filter(tx => tx.date === date);
-
-    return (
-      <div className="pb-24 pt-4 px-4 max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4">
-        {/* 入力フォーム */}
-        <div className={`bg-white rounded-3xl shadow-sm border p-5 mb-6 transition-all ${editingId ? 'border-orange-400 shadow-orange-100 ring-4 ring-orange-50' : 'border-orange-100'}`}>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-bold text-gray-700 flex items-center gap-2">
-              <Edit3 size={18} className={editingId ? 'text-orange-500' : 'text-orange-400'}/> 
-              {editingId ? '記録の修正' : '新しく入力'}
-            </h3>
-            {editingId && (
-              <button onClick={handleCancelEdit} className="text-xs bg-gray-100 px-3 py-1 rounded-full text-gray-500 font-bold hover:bg-gray-200">
-                キャンセル
-              </button>
-            )}
-          </div>
-
-          <div className="flex bg-orange-50 rounded-2xl p-1 mb-5">
-            <button
-              type="button"
-              className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${type === 'expense' ? 'bg-white text-rose-500 shadow-sm' : 'text-gray-400'}`}
-              onClick={() => handleTypeChange('expense')}
-            >
-              支出
-            </button>
-            <button
-              type="button"
-              className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${type === 'income' ? 'bg-white text-teal-500 shadow-sm' : 'text-gray-400'}`}
-              onClick={() => handleTypeChange('income')}
-            >
-              収入
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">日付</label>
-              <input type="date" value={date} onChange={handleDateChange} required
-                className="w-full bg-gray-50 border-none rounded-2xl p-3 text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none font-bold" />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">金額</label>
-              <div className="relative">
-                <span className="absolute left-4 top-3 text-gray-400 font-bold">¥</span>
-                <input type="text" inputMode="numeric" value={amount ? Number(amount).toLocaleString() : ''} onChange={handleAmountChange} required placeholder="0"
-                  className="w-full bg-gray-50 border-none rounded-2xl p-3 pl-8 text-xl font-bold text-gray-800 focus:ring-2 focus:ring-orange-200 outline-none" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">カテゴリー</label>
-              {availableParents.length === 0 ? (
-                <div className="py-4 px-3 text-center bg-orange-50/60 rounded-2xl border border-dashed border-orange-200">
-                  <p className="text-xs text-gray-500 font-bold mb-2">
-                    {isSyncing ? 'カテゴリーを同期中...' : 'カテゴリーを読み込んでいます'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setSyncTrigger(prev => prev + 1)}
-                    className="text-xs text-orange-500 font-bold px-4 py-1.5 bg-white rounded-full border border-orange-200 shadow-sm active:scale-95 inline-flex items-center gap-1"
-                  >
-                    <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} /> 再読み込み
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-4 gap-2">
-                  {availableParents.map(cat => {
-                    const Icon = ICON_MAP[cat.icon] || Zap;
-                    const isSelected = selectedParentId === cat.id;
-                    return (
-                      <button type="button" key={cat.id} 
-                        onClick={() => handleParentSelect(cat.id)}
-                        className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all ${isSelected ? 'bg-orange-100 ring-2 ring-orange-300' : 'bg-gray-50 hover:bg-gray-100'}`}
-                      >
-                        <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1 text-white" style={{ backgroundColor: cat.color }}>
-                          <Icon size={18} />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-600 truncate w-full text-center">{cat.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              
-              {/* サブカテゴリーがある場合のみ表示 */}
-              {availableSubs.length > 0 && (
-                <div className="mt-3 bg-orange-50/50 p-3 rounded-2xl border border-orange-100 animate-in fade-in zoom-in-95">
-                  <label className="block text-[10px] font-bold text-orange-400 mb-2">サブカテゴリー (任意)</label>
-                  <div className="flex flex-wrap gap-2">
-                    {availableSubs.map(sub => {
-                      const isSelected = selectedSubId === sub.id;
-                      return (
-                        <button type="button" key={sub.id}
-                          onClick={() => handleSubSelect(sub.id)}
-                          className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${isSelected ? 'bg-orange-400 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-orange-100'}`}
-                        >
-                          {sub.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">メモ (任意)</label>
-              <input type="text" value={memo} onChange={handleMemoChange} placeholder="スーパーなど..."
-                className="w-full bg-gray-50 border-none rounded-2xl p-3 text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none text-sm" />
-            </div>
-
-            {editingId ? (
-              <div className="flex gap-3 mt-2">
-                <button type="submit" disabled={!amount || !selectedParentId}
-                  className="flex-1 text-white font-bold py-4 rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 bg-rose-400 hover:bg-rose-500 disabled:opacity-50">
-                  <Check size={20}/> 修正を保存する
-                </button>
-                <button type="button" onClick={() => handleDelete(editingId)}
-                  className="w-14 shrink-0 text-rose-500 bg-rose-50 border border-rose-200 font-bold py-4 rounded-2xl shadow-sm transition-all active:scale-95 flex items-center justify-center hover:bg-rose-100">
-                  <Trash2 size={20}/>
-                </button>
-              </div>
-            ) : (
-              <button type="submit" disabled={!amount || !selectedParentId}
-                className="w-full text-white font-bold py-4 rounded-2xl shadow-md transition-all active:scale-95 mt-2 flex items-center justify-center gap-2 bg-orange-400 hover:bg-orange-500 disabled:bg-orange-200">
-                <Plus size={20} /> 入力する
-              </button>
-            )}
-          </form>
-        </div>
-
-        {/* カレンダー */}
-        <div className="bg-white rounded-3xl shadow-sm border border-orange-50 p-4 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <button onClick={() => changeCalMonth(-1)} className="p-1 text-orange-400 bg-orange-50 rounded-lg"><ChevronLeft size={20}/></button>
-            <h3 className="font-bold text-gray-700"><span>{`${calYear}年 ${calMonth}月`}</span></h3>
-            <button onClick={() => changeCalMonth(1)} className="p-1 text-orange-400 bg-orange-50 rounded-lg"><ChevronRight size={20}/></button>
-          </div>
-          
-          <div className="grid grid-cols-7 gap-1 text-center mb-1">
-            {['日', '月', '火', '水', '木', '金', '土'].map(d => (
-              <div key={d} className="text-[10px] font-bold text-gray-400">{d}</div>
-            ))}
-          </div>
-          
-          <div className="grid grid-cols-7 gap-1">
-            {calendarDays.map((dObj, idx) => {
-              if (!dObj) return <div key={`empty-${idx}`} className="h-14"></div>;
-              
-              const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
-              const isSelected = dStr === date;
-              const isToday = dStr === currentMonthStr + '-' + String(today.getDate()).padStart(2, '0');
-              
-              const dayTxs = transactions.filter(t => t.date === dStr);
-              const dayExp = dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-              const dayInc = dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-
-              return (
-                <div 
-                  key={dStr} 
-                  onClick={() => { 
-                    if (dayTxs.length > 0) {
-                      const element = document.getElementById(`tx-list-${dStr}`);
-                      if (element) {
-                        element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }
-                    }
-                  }}
-                  className={`h-14 border rounded-xl flex flex-col p-1 cursor-pointer transition-all ${isSelected ? 'border-orange-400 bg-orange-50 shadow-sm' : 'border-gray-50 hover:bg-gray-50'} ${isToday && !isSelected ? 'bg-orange-50/50' : ''}`}
-                >
-                  <div className={`text-[10px] font-bold text-left pl-1 ${isSelected ? 'text-orange-600' : 'text-gray-500'}`}>{dObj.getDate()}</div>
-                  <div className="flex flex-col gap-[1px] mt-auto">
-                    {dayInc > 0 && <span className="text-[8px] font-bold text-teal-500 truncate leading-tight">+{dayInc}</span>}
-                    {dayExp > 0 && <span className="text-[8px] font-bold text-rose-500 truncate leading-tight">-{dayExp}</span>}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* その月のすべての記録 */}
-        <h3 id="tx-records-section" className="font-bold text-gray-600 mb-3 ml-2 flex items-center gap-2 pt-2 scroll-mt-24">
-          <ListPlus size={18} className="text-orange-400"/> 
-          <span>{`${calYear}年 ${calMonth}月の記録`}</span>
-        </h3>
-        <div className="space-y-5 mb-6">
-          {(() => {
-            const currentMonthPrefix = `${calYear}-${String(calMonth).padStart(2, '0')}`;
-            const monthTx = transactions
-              .filter(tx => tx.date.startsWith(currentMonthPrefix))
-              .sort((a, b) => {
-                const dateComp = b.date.localeCompare(a.date); // 降順
-                if (dateComp !== 0) return dateComp;
-                const aTime = a.createdAt || '';
-                const bTime = b.createdAt || '';
-                return bTime.localeCompare(aTime); // 新しいものが上
-              });
-
-            if (monthTx.length === 0) {
-              return (
-                <div className="text-center py-6">
-                  <p className="text-gray-400 text-sm">
-                    {isSyncing ? 'データを同期中...' : 'この月の記録はありません'}
-                  </p>
-                </div>
-              );
-            }
-
-            const grouped = {};
-            monthTx.forEach(tx => {
-              if (!grouped[tx.date]) grouped[tx.date] = [];
-              grouped[tx.date].push(tx);
-            });
-
-            const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
-            return sortedDates.map(dStr => (
-              <div key={dStr} id={`tx-list-${dStr}`} className="scroll-mt-28">
-                <div className="text-xs font-bold text-gray-500 mb-2 pl-2 border-l-2 border-orange-300">
-                  {parseInt(dStr.split('-')[2], 10)}日
-                </div>
-                <div className="space-y-2">
-                  {grouped[dStr].map(tx => {
-                    const cat = categories.find(c => c.id === tx.categoryId);
-                    if (!cat) return null;
-                    
-                    const parentCat = getParentCategory(tx.categoryId);
-                    const displayColor = parentCat ? parentCat.color : cat.color;
-                    const displayIcon = parentCat ? parentCat.icon : cat.icon;
-                    const Icon = ICON_MAP[displayIcon] || Zap;
-                    
-                    const isEditing = editingId === tx.id;
-                    const displayName = cat.parentId ? `${parentCat.name} (${cat.name})` : cat.name;
-                    
-                    return (
-                      <div key={tx.id} 
-                        onClick={() => handleEditClick(tx)}
-                        className={`bg-white p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-all ${isEditing ? 'border-2 border-orange-300 shadow-md ring-2 ring-orange-50' : 'border border-gray-100 shadow-sm hover:border-orange-200'}`}
-                      >
-                        <div className="w-12 h-12 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: displayColor }}>
-                          <Icon size={20} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-start">
-                            <span className="font-bold text-gray-700 truncate text-sm">{displayName}</span>
-                            <span className={`font-bold ${tx.type === 'expense' ? 'text-rose-500' : 'text-teal-500'}`}>
-                              {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center mt-1">
-                            <span className="text-xs text-gray-400">{tx.memo || ''}</span>
-                            <button onClick={(e) => { e.stopPropagation(); handleDelete(tx.id); }} className="text-gray-300 hover:text-red-400 p-1 bg-gray-50 rounded-md">
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ));
-          })()}
-        </div>
-      </div>
-    );
-  };
 
   const ReportScreen = () => {
     const [period, setPeriod] = useState('month');
@@ -2717,7 +2175,26 @@ export default function App() {
 
       {/* メインコンテンツ切り替え */}
       <main>
-        {activeTab === 'input' && <InputScreen />}
+        {activeTab === 'input' && (
+          <InputScreen
+            getBasePath={getBasePath}
+            transactions={transactions}
+            categories={categories}
+            activeParentCategories={activeParentCategories}
+            getActiveSubCategories={getActiveSubCategories}
+            getParentId={getParentId}
+            getParentCategory={getParentCategory}
+            formatCurrency={formatCurrency}
+            txToEditRef={txToEditRef}
+            isSyncing={isSyncing}
+            setSyncTrigger={setSyncTrigger}
+            showConfirm={showConfirm}
+            closeConfirm={closeConfirm}
+            currentMonthStr={currentMonthStr}
+            today={today}
+            generateCalendar={generateCalendar}
+          />
+        )}
         {activeTab === 'report' && <ReportScreen />}
         {activeTab === 'asset' && <AssetScreen />}
         {activeTab === 'future' && <FutureScreen />}
@@ -2763,5 +2240,553 @@ function NavButton({ id, icon, label, active, onClick }) {
       </div>
       <span className={`text-[10px] font-bold ${isActive ? 'opacity-100' : 'opacity-70'}`}>{label}</span>
     </button>
+  );
+}
+
+function InputScreen({
+  getBasePath,
+  transactions,
+  categories,
+  activeParentCategories,
+  getActiveSubCategories,
+  getParentId,
+  getParentCategory,
+  formatCurrency,
+  txToEditRef,
+  isSyncing,
+  setSyncTrigger,
+  showConfirm,
+  closeConfirm,
+  currentMonthStr,
+  today,
+  generateCalendar,
+}) {
+  const draft = useMemo(() => getInputDraft() || {}, []);
+
+  const [type, setType] = useState(() => draft.type || 'expense');
+  const [amount, setAmount] = useState(() => draft.amount || '');
+  const [date, setDate] = useState(() => draft.date || today.toISOString().split('T')[0]);
+  const [selectedParentId, setSelectedParentId] = useState(() => draft.selectedParentId || '');
+  const [selectedSubId, setSelectedSubId] = useState(() => draft.selectedSubId || '');
+  const [memo, setMemo] = useState(() => draft.memo || '');
+  const [editingId, setEditingId] = useState(() => draft.editingId || null);
+
+  const isResettingRef = useRef(false);
+
+  // イベントリスナー内で常に最新のフォーム値を参照するための ref
+  const formStateRef = useRef({
+    type,
+    amount,
+    date,
+    selectedParentId,
+    selectedSubId,
+    memo,
+    editingId
+  });
+
+  useEffect(() => {
+    formStateRef.current = {
+      type,
+      amount,
+      date,
+      selectedParentId,
+      selectedSubId,
+      memo,
+      editingId
+    };
+  }, [type, amount, date, selectedParentId, selectedSubId, memo, editingId]);
+
+  // 即時同期保存（iPhoneの画面オフ直前に即時反映させるため）
+  const saveDraftImmediate = (updates = {}) => {
+    if (isResettingRef.current) return;
+    const current = { ...formStateRef.current, ...updates };
+    const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
+    if (hasContent) {
+      setInputDraft(current);
+    }
+  };
+
+  const handleAmountChange = (e) => {
+    const rawVal = e.target.value.replace(/[^0-9]/g, '');
+    setAmount(rawVal);
+    saveDraftImmediate({ amount: rawVal });
+  };
+
+  const handleMemoChange = (e) => {
+    const val = e.target.value;
+    setMemo(val);
+    saveDraftImmediate({ memo: val });
+  };
+
+  const handleDateChange = (e) => {
+    const val = e.target.value;
+    setDate(val);
+    saveDraftImmediate({ date: val });
+  };
+
+  const handleTypeChange = (newType) => {
+    setType(newType);
+    setSelectedParentId('');
+    setSelectedSubId('');
+    saveDraftImmediate({ type: newType, selectedParentId: '', selectedSubId: '' });
+  };
+
+  const handleParentSelect = (catId) => {
+    setSelectedParentId(catId);
+    setSelectedSubId('');
+    saveDraftImmediate({ selectedParentId: catId, selectedSubId: '' });
+  };
+
+  const handleSubSelect = (subId) => {
+    setSelectedSubId(subId);
+    saveDraftImmediate({ selectedSubId: subId });
+  };
+
+  const resetInputForm = () => {
+    isResettingRef.current = true;
+    clearInputDraft();
+    setAmount('');
+    setMemo('');
+    setSelectedParentId('');
+    setSelectedSubId('');
+    setDate(today.toISOString().split('T')[0]);
+    setType('expense');
+    setEditingId(null);
+    formStateRef.current = {
+      type: 'expense',
+      amount: '',
+      date: today.toISOString().split('T')[0],
+      selectedParentId: '',
+      selectedSubId: '',
+      memo: '',
+      editingId: null
+    };
+    setTimeout(() => {
+      clearInputDraft();
+      isResettingRef.current = false;
+    }, 300);
+  };
+
+  // iPhone/Androidのスリープ（画面オフ）・復帰（画面オン）を検知して確実に保存＆復元
+  useEffect(() => {
+    const restoreDraft = () => {
+      if (isResettingRef.current) return;
+      const saved = getInputDraft();
+      if (saved) {
+        if (saved.amount !== undefined) setAmount(saved.amount);
+        if (saved.memo !== undefined) setMemo(saved.memo);
+        if (saved.type !== undefined) setType(saved.type);
+        if (saved.date !== undefined) setDate(saved.date);
+        if (saved.selectedParentId !== undefined) setSelectedParentId(saved.selectedParentId);
+        if (saved.selectedSubId !== undefined) setSelectedSubId(saved.selectedSubId);
+        if (saved.editingId !== undefined) setEditingId(saved.editingId);
+      }
+    };
+
+    const saveCurrent = () => {
+      if (isResettingRef.current) return;
+      const current = formStateRef.current;
+      const hasContent = current.amount || current.memo || current.selectedParentId || current.selectedSubId || current.editingId || (current.type !== 'expense');
+      if (hasContent) {
+        setInputDraft(current);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveCurrent();
+      } else if (document.visibilityState === 'visible') {
+        restoreDraft();
+      }
+    };
+
+    window.addEventListener('pagehide', saveCurrent);
+    window.addEventListener('beforeunload', saveCurrent);
+    window.addEventListener('pageshow', restoreDraft);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pagehide', saveCurrent);
+      window.removeEventListener('beforeunload', saveCurrent);
+      window.removeEventListener('pageshow', restoreDraft);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  const availableParents = activeParentCategories.filter(c => c.type === type);
+  const availableSubs = selectedParentId ? getActiveSubCategories(selectedParentId) : [];
+
+  const calDate = parseSafeDate(date);
+  const calYear = calDate.getFullYear();
+  const calMonth = calDate.getMonth() + 1;
+  const calendarDays = generateCalendar(calYear, calMonth);
+
+  const changeCalMonth = (offset) => {
+    const d = new Date(calYear, calMonth - 1 + offset, 1);
+    const newDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    setDate(newDateStr);
+    saveDraftImmediate({ date: newDateStr });
+  };
+
+  const handleEditClick = (tx) => {
+    setEditingId(tx.id);
+    setType(tx.type);
+    setAmount(String(tx.amount));
+    setDate(tx.date);
+    setMemo(tx.memo || '');
+    
+    const pId = getParentId(tx.categoryId);
+    if (pId !== tx.categoryId) {
+      // サブカテゴリが記録されていた場合
+      setSelectedParentId(pId);
+      setSelectedSubId(tx.categoryId);
+    } else {
+      // 親カテゴリのみ記録されていた場合
+      setSelectedParentId(tx.categoryId);
+      setSelectedSubId('');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    if (txToEditRef.current) {
+      handleEditClick(txToEditRef.current);
+      txToEditRef.current = null;
+    }
+  }, []);
+
+  const handleCancelEdit = () => {
+    resetInputForm();
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    // サブが選ばれていればサブを、選ばれていなければ親を最終的なカテゴリIDとする
+    const finalCategoryId = selectedSubId || selectedParentId;
+    if (!amount || !finalCategoryId || !date) return;
+    
+    const txData = {
+      amount: parseInt(amount, 10),
+      date,
+      categoryId: finalCategoryId,
+      memo,
+      type,
+      updatedAt: new Date().toISOString()
+    };
+
+    const currentEditingId = editingId;
+    const savedDate = date;
+
+    // 先にフォームと下書きをリセット
+    resetInputForm();
+
+    try {
+      if (currentEditingId) {
+        await setDoc(doc(db, `${getBasePath()}/transactions/${currentEditingId}`), txData, { merge: true });
+      } else {
+        const txId = crypto.randomUUID();
+        txData.createdAt = new Date().toISOString();
+        await setDoc(doc(db, `${getBasePath()}/transactions/${txId}`), txData);
+      }
+
+      // 入力完了後に下部のリスト表示部分へスクロール
+      const scrollToTarget = () => {
+        const dateEl = document.getElementById(`tx-list-${savedDate}`);
+        if (dateEl) {
+          dateEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          return true;
+        }
+        return false;
+      };
+
+      setTimeout(() => {
+        const found = scrollToTarget();
+        if (!found) {
+          const sectionEl = document.getElementById('tx-records-section');
+          if (sectionEl) {
+            sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+          setTimeout(scrollToTarget, 200);
+        }
+      }, 100);
+    } catch (err) {
+      console.error("保存エラー", err);
+      alert("保存に失敗しました");
+    }
+  };
+
+  const handleDelete = (id) => {
+    showConfirm("この記録を削除してもよろしいですか？", async () => {
+      await deleteDoc(doc(db, `${getBasePath()}/transactions/${id}`));
+      if (editingId === id) resetInputForm();
+      closeConfirm();
+    });
+  };
+
+  return (
+    <div className="pb-24 pt-4 px-4 max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4">
+      {/* 入力フォーム */}
+      <div className={`bg-white rounded-3xl shadow-sm border p-5 mb-6 transition-all ${editingId ? 'border-orange-400 shadow-orange-100 ring-4 ring-orange-50' : 'border-orange-100'}`}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-bold text-gray-700 flex items-center gap-2">
+            <Edit3 size={18} className={editingId ? 'text-orange-500' : 'text-orange-400'}/> 
+            {editingId ? '記録の修正' : '新しく入力'}
+          </h3>
+          {editingId && (
+            <button onClick={handleCancelEdit} className="text-xs bg-gray-100 px-3 py-1 rounded-full text-gray-500 font-bold hover:bg-gray-200">
+              キャンセル
+            </button>
+          )}
+        </div>
+
+        <div className="flex bg-orange-50 rounded-2xl p-1 mb-5">
+          <button
+            type="button"
+            className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${type === 'expense' ? 'bg-white text-rose-500 shadow-sm' : 'text-gray-400'}`}
+            onClick={() => handleTypeChange('expense')}
+          >
+            支出
+          </button>
+          <button
+            type="button"
+            className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${type === 'income' ? 'bg-white text-teal-500 shadow-sm' : 'text-gray-400'}`}
+            onClick={() => handleTypeChange('income')}
+          >
+            収入
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">日付</label>
+            <input type="date" value={date} onChange={handleDateChange} required
+              className="w-full bg-gray-50 border-none rounded-2xl p-3 text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none font-bold" />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">金額</label>
+            <div className="relative">
+              <span className="absolute left-4 top-3 text-gray-400 font-bold">¥</span>
+              <input type="text" inputMode="numeric" value={amount ? Number(amount).toLocaleString() : ''} onChange={handleAmountChange} required placeholder="0"
+                className="w-full bg-gray-50 border-none rounded-2xl p-3 pl-8 text-xl font-bold text-gray-800 focus:ring-2 focus:ring-orange-200 outline-none" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">カテゴリー</label>
+            {availableParents.length === 0 ? (
+              <div className="py-4 px-3 text-center bg-orange-50/60 rounded-2xl border border-dashed border-orange-200">
+                <p className="text-xs text-gray-500 font-bold mb-2">
+                  {isSyncing ? 'カテゴリーを同期中...' : 'カテゴリーを読み込んでいます'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSyncTrigger(prev => prev + 1)}
+                  className="text-xs text-orange-500 font-bold px-4 py-1.5 bg-white rounded-full border border-orange-200 shadow-sm active:scale-95 inline-flex items-center gap-1"
+                >
+                  <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} /> 再読み込み
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-2">
+                {availableParents.map(cat => {
+                  const Icon = ICON_MAP[cat.icon] || Zap;
+                  const isSelected = selectedParentId === cat.id;
+                  return (
+                    <button type="button" key={cat.id} 
+                      onClick={() => handleParentSelect(cat.id)}
+                      className={`flex flex-col items-center justify-center p-2 rounded-2xl transition-all ${isSelected ? 'bg-orange-100 ring-2 ring-orange-300' : 'bg-gray-50 hover:bg-gray-100'}`}
+                    >
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1 text-white" style={{ backgroundColor: cat.color }}>
+                        <Icon size={18} />
+                      </div>
+                      <span className="text-[10px] font-bold text-gray-600 truncate w-full text-center">{cat.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            
+            {/* サブカテゴリーがある場合のみ表示 */}
+            {availableSubs.length > 0 && (
+              <div className="mt-3 bg-orange-50/50 p-3 rounded-2xl border border-orange-100 animate-in fade-in zoom-in-95">
+                <label className="block text-[10px] font-bold text-orange-400 mb-2">サブカテゴリー (任意)</label>
+                <div className="flex flex-wrap gap-2">
+                  {availableSubs.map(sub => {
+                    const isSelected = selectedSubId === sub.id;
+                    return (
+                      <button type="button" key={sub.id} 
+                        onClick={() => handleSubSelect(sub.id)}
+                        className={`px-3 py-1.5 text-xs font-bold rounded-full transition-all ${isSelected ? 'bg-orange-400 text-white shadow-sm' : 'bg-white text-gray-600 hover:bg-orange-100'}`}
+                      >
+                        {sub.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">メモ (任意)</label>
+            <input type="text" value={memo} onChange={handleMemoChange} placeholder="スーパーなど..."
+              className="w-full bg-gray-50 border-none rounded-2xl p-3 text-gray-700 focus:ring-2 focus:ring-orange-200 outline-none text-sm" />
+          </div>
+
+          {editingId ? (
+            <div className="flex gap-3 mt-2">
+              <button type="submit" disabled={!amount || !selectedParentId}
+                className="flex-1 text-white font-bold py-4 rounded-2xl shadow-md transition-all active:scale-95 flex items-center justify-center gap-2 bg-rose-400 hover:bg-rose-500 disabled:opacity-50">
+                <Check size={20}/> 修正を保存する
+              </button>
+              <button type="button" onClick={() => handleDelete(editingId)}
+                className="w-14 shrink-0 text-rose-500 bg-rose-50 border border-rose-200 font-bold py-4 rounded-2xl shadow-sm transition-all active:scale-95 flex items-center justify-center hover:bg-rose-100">
+                <Trash2 size={20}/>
+              </button>
+            </div>
+          ) : (
+            <button type="submit" disabled={!amount || !selectedParentId}
+              className="w-full text-white font-bold py-4 rounded-2xl shadow-md transition-all active:scale-95 mt-2 flex items-center justify-center gap-2 bg-orange-400 hover:bg-orange-500 disabled:bg-orange-200">
+              <Plus size={20} /> 入力する
+            </button>
+          )}
+        </form>
+      </div>
+
+      {/* カレンダー */}
+      <div className="bg-white rounded-3xl shadow-sm border border-orange-50 p-4 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <button onClick={() => changeCalMonth(-1)} className="p-1 text-orange-400 bg-orange-50 rounded-lg"><ChevronLeft size={20}/></button>
+          <h3 className="font-bold text-gray-700"><span>{`${calYear}年 ${calMonth}月`}</span></h3>
+          <button onClick={() => changeCalMonth(1)} className="p-1 text-orange-400 bg-orange-50 rounded-lg"><ChevronRight size={20}/></button>
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1 text-center mb-1">
+          {['日', '月', '火', '水', '木', '金', '土'].map(d => (
+            <div key={d} className="text-[10px] font-bold text-gray-400">{d}</div>
+          ))}
+        </div>
+        
+        <div className="grid grid-cols-7 gap-1">
+          {calendarDays.map((dObj, idx) => {
+            if (!dObj) return <div key={`empty-${idx}`} className="h-14"></div>;
+            
+            const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+            const isSelected = dStr === date;
+            const isToday = dStr === currentMonthStr + '-' + String(today.getDate()).padStart(2, '0');
+            
+            const dayTxs = transactions.filter(t => t.date === dStr);
+            const dayExp = dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+            const dayInc = dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+
+            return (
+              <div 
+                key={dStr} 
+                onClick={() => { 
+                  if (dayTxs.length > 0) {
+                    const element = document.getElementById(`tx-list-${dStr}`);
+                    if (element) {
+                      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }
+                }}
+                className={`h-14 border rounded-xl flex flex-col p-1 cursor-pointer transition-all ${isSelected ? 'border-orange-400 bg-orange-50 shadow-sm' : 'border-gray-50 hover:bg-gray-50'} ${isToday && !isSelected ? 'bg-orange-50/50' : ''}`}
+              >
+                <div className={`text-[10px] font-bold text-left pl-1 ${isSelected ? 'text-orange-600' : 'text-gray-500'}`}>{dObj.getDate()}</div>
+                <div className="flex flex-col gap-[1px] mt-auto">
+                  {dayInc > 0 && <span className="text-[8px] font-bold text-teal-500 truncate leading-tight">+{dayInc}</span>}
+                  {dayExp > 0 && <span className="text-[8px] font-bold text-rose-500 truncate leading-tight">-{dayExp}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* その月のすべての記録 */}
+      <h3 id="tx-records-section" className="font-bold text-gray-600 mb-3 ml-2 flex items-center gap-2 pt-2 scroll-mt-24">
+        <ListPlus size={18} className="text-orange-400"/> 
+        <span>{`${calYear}年 ${calMonth}月の記録`}</span>
+      </h3>
+      <div className="space-y-5 mb-6">
+        {(() => {
+          const currentMonthPrefix = `${calYear}-${String(calMonth).padStart(2, '0')}`;
+          const monthTx = transactions
+            .filter(tx => tx.date.startsWith(currentMonthPrefix))
+            .sort((a, b) => {
+              const dateComp = b.date.localeCompare(a.date); // 降順
+              if (dateComp !== 0) return dateComp;
+              const aTime = a.createdAt || '';
+              const bTime = b.createdAt || '';
+              return bTime.localeCompare(aTime); // 新しいものが上
+            });
+
+          if (monthTx.length === 0) {
+            return (
+              <div className="text-center py-6">
+                <p className="text-gray-400 text-sm">
+                  {isSyncing ? 'データを同期中...' : 'この月の記録はありません'}
+                </p>
+              </div>
+            );
+          }
+
+          const grouped = {};
+          monthTx.forEach(tx => {
+            if (!grouped[tx.date]) grouped[tx.date] = [];
+            grouped[tx.date].push(tx);
+          });
+
+          const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+          return sortedDates.map(dStr => (
+            <div key={dStr} id={`tx-list-${dStr}`} className="scroll-mt-28">
+              <div className="text-xs font-bold text-gray-500 mb-2 pl-2 border-l-2 border-orange-300">
+                {parseInt(dStr.split('-')[2], 10)}日
+              </div>
+              <div className="space-y-2">
+                {grouped[dStr].map(tx => {
+                  const cat = categories.find(c => c.id === tx.categoryId);
+                  if (!cat) return null;
+                  
+                  const parentCat = getParentCategory(tx.categoryId);
+                  const displayColor = parentCat ? parentCat.color : cat.color;
+                  const displayIcon = parentCat ? parentCat.icon : cat.icon;
+                  const Icon = ICON_MAP[displayIcon] || Zap;
+                  
+                  const isEditing = editingId === tx.id;
+                  const displayName = cat.parentId ? `${parentCat.name} (${cat.name})` : cat.name;
+                  
+                  return (
+                    <div key={tx.id} 
+                      onClick={() => handleEditClick(tx)}
+                      className={`bg-white p-3 rounded-2xl flex items-center gap-3 cursor-pointer transition-all ${isEditing ? 'border-2 border-orange-300 shadow-md ring-2 ring-orange-50' : 'border border-gray-100 shadow-sm hover:border-orange-200'}`}
+                    >
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: displayColor }}>
+                        <Icon size={20} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <span className="font-bold text-gray-700 truncate text-sm">{displayName}</span>
+                          <span className={`font-bold ${tx.type === 'expense' ? 'text-rose-500' : 'text-teal-500'}`}>
+                            {tx.type === 'expense' ? '-' : '+'}{formatCurrency(tx.amount)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-xs text-gray-400">{tx.memo || ''}</span>
+                          <button onClick={(e) => { e.stopPropagation(); handleDelete(tx.id); }} className="text-gray-300 hover:text-red-400 p-1 bg-gray-50 rounded-md">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ));
+        })()}
+      </div>
+    </div>
   );
 }
