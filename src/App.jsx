@@ -551,13 +551,28 @@ export default function App() {
       }
     }, []);
 
-    const handleCancelEdit = () => {
-      setEditingId(null);
+    const resetInputForm = () => {
       setAmount('');
       setMemo('');
       setSelectedParentId('');
       setSelectedSubId('');
+      setDate(today.toISOString().split('T')[0]);
+      setType('expense');
+      setEditingId(null);
+      formStateRef.current = {
+        type: 'expense',
+        amount: '',
+        date: today.toISOString().split('T')[0],
+        selectedParentId: '',
+        selectedSubId: '',
+        memo: '',
+        editingId: null
+      };
       clearInputDraft();
+    };
+
+    const handleCancelEdit = () => {
+      resetInputForm();
     };
 
     const handleSubmit = async (e) => {
@@ -579,16 +594,14 @@ export default function App() {
         const savedDate = date;
         if (editingId) {
           await setDoc(doc(db, `${getBasePath()}/transactions/${editingId}`), txData, { merge: true });
-          setEditingId(null);
         } else {
           const txId = crypto.randomUUID();
           txData.createdAt = new Date().toISOString();
           await setDoc(doc(db, `${getBasePath()}/transactions/${txId}`), txData);
         }
-        setAmount('');
-        setMemo('');
-        setSelectedSubId('');
-        clearInputDraft();
+
+        // 登録完了後にすべての入力内容と下書きを完全にリセット
+        resetInputForm();
 
         // 入力完了後に下部のリスト表示部分へスクロール
         const scrollToTarget = () => {
@@ -619,8 +632,7 @@ export default function App() {
     const handleDelete = (id) => {
       showConfirm("この記録を削除してもよろしいですか？", async () => {
         await deleteDoc(doc(db, `${getBasePath()}/transactions/${id}`));
-        if (editingId === id) handleCancelEdit();
-        clearInputDraft();
+        if (editingId === id) resetInputForm();
         closeConfirm();
       });
     };
