@@ -114,8 +114,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('input');
   
-  // 初期値にキャッシュまたはデフォルト値を設定し、iPhone起動時の空白時間をゼロにする
-  const [categories, setCategories] = useState(() => getLocalCache('kakeibo_cache_categories', DEFAULT_CATEGORIES));
+  // ユーザー設定カテゴリーが確実に取得されるまで「ロード中」を維持する（デフォルト項目の誤表示を防止）
+  const [categories, setCategories] = useState([]);
+  const [isCategoriesLoaded, setIsCategoriesLoaded] = useState(false);
   const [transactions, setTransactions] = useState(() => getLocalCache('kakeibo_cache_transactions', []));
   const [assets, setAssets] = useState(() => getLocalCache('kakeibo_cache_assets', []));
   
@@ -190,8 +191,9 @@ export default function App() {
     const cachedCats = getLocalCache(`kakeibo_cache_cats_${basePath}`, null);
     if (cachedCats && cachedCats.length > 0) {
       setCategories(cachedCats);
-    } else if (activeWorkspace === 'personal') {
-      setCategories(DEFAULT_CATEGORIES);
+      setIsCategoriesLoaded(true);
+    } else {
+      setIsCategoriesLoaded(false);
     }
 
     const cachedTx = getLocalCache(`kakeibo_cache_tx_${basePath}`, null);
@@ -246,6 +248,7 @@ export default function App() {
             setLocalCache(`kakeibo_cache_cats_${basePath}`, sortedCats);
             setLocalCache('kakeibo_cache_categories', sortedCats);
           }
+          setIsCategoriesLoaded(true);
           setIsSyncing(false);
         }, (error) => {
           console.error("Categories snapshot error:", error);
@@ -1811,6 +1814,12 @@ export default function App() {
             <h3 className="font-bold text-gray-600 mb-3 border-b border-gray-100 pb-2">
               {type === 'expense' ? '支出の項目' : type === 'income' ? '収入の項目' : '資産の項目'}
             </h3>
+            {!isCategoriesLoaded ? (
+              <div className="py-6 text-center text-gray-400 font-bold text-xs flex items-center justify-center gap-2">
+                <RefreshCw size={14} className="animate-spin text-orange-400" />
+                項目設定をロード中...
+              </div>
+            ) : (
             <div className="flex flex-col gap-3">
               {typeParents.map((parentCat, pIdx) => {
                 const Icon = ICON_MAP[parentCat.icon] || Zap;
@@ -1872,6 +1881,7 @@ export default function App() {
                 );
               })}
             </div>
+            )}
           </div>
           );
         })}
@@ -2180,6 +2190,7 @@ export default function App() {
             getBasePath={getBasePath}
             transactions={transactions}
             categories={categories}
+            isCategoriesLoaded={isCategoriesLoaded}
             activeParentCategories={activeParentCategories}
             getActiveSubCategories={getActiveSubCategories}
             getParentId={getParentId}
@@ -2247,6 +2258,7 @@ function InputScreen({
   getBasePath,
   transactions,
   categories,
+  isCategoriesLoaded,
   activeParentCategories,
   getActiveSubCategories,
   getParentId,
@@ -2574,10 +2586,18 @@ function InputScreen({
 
           <div>
             <label className="block text-xs font-bold text-gray-400 mb-1 ml-1">カテゴリー</label>
-            {availableParents.length === 0 ? (
-              <div className="py-4 px-3 text-center bg-orange-50/60 rounded-2xl border border-dashed border-orange-200">
+            {!isCategoriesLoaded ? (
+              <div className="py-6 px-4 text-center bg-orange-50/60 rounded-2xl border border-dashed border-orange-200">
+                <div className="flex items-center justify-center gap-2 mb-2 text-orange-400">
+                  <RefreshCw size={18} className="animate-spin" />
+                  <span className="text-sm font-bold text-gray-600">カテゴリー設定をロード中...</span>
+                </div>
+                <p className="text-xs text-gray-400">設定されたカテゴリーを読み込んでいます</p>
+              </div>
+            ) : availableParents.length === 0 ? (
+              <div className="py-6 px-4 text-center bg-orange-50/60 rounded-2xl border border-dashed border-orange-200">
                 <p className="text-xs text-gray-500 font-bold mb-2">
-                  {isSyncing ? 'カテゴリーを同期中...' : 'カテゴリーを読み込んでいます'}
+                  {isSyncing ? 'カテゴリーを同期中...' : '登録されたカテゴリーがありません'}
                 </p>
                 <button
                   type="button"
