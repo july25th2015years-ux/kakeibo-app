@@ -37,9 +37,9 @@ const ICON_MAP = {
 };
 
 const COLOR_PALETTE = [
-  '#FF9A9E', '#FECFEF', '#FBC2EB', '#A18CD1', '#FBC2EB',
-  '#84FAB0', '#8FD3F4', '#A1C4FD', '#FFECD2', '#FCB69F',
-  '#FFD194', '#70E1F5', '#F6D365', '#FDA085', '#D4FC79'
+  '#FF9A9E', '#FDA085', '#FCB69F', '#FFD194', '#FFECD2',
+  '#F6D365', '#D4FC79', '#84FAB0', '#70E1F5', '#8FD3F4',
+  '#A1C4FD', '#A18CD1', '#FBC2EB', '#FECFEF'
 ];
 
 const DEFAULT_CATEGORIES = [
