@@ -615,37 +615,31 @@ export default function App() {
             <PieChartIcon size={18} className="text-orange-400"/> {reportType === 'expense' ? '支出' : '収入'}の割合
           </h3>
           {chartData.length > 0 ? (
-            <div className="h-64 w-full relative">
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-6">
-                <span className="text-[10px] font-bold text-gray-400">合計{reportType === 'expense' ? '支出' : '収入'}</span>
-                <span className="text-lg font-bold text-gray-700 leading-tight">{formatCurrency(reportType === 'expense' ? totalExpense : totalIncome)}</span>
+            <div className="w-full">
+              <div className="h-52 w-full relative">
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-[10px] font-bold text-gray-400">合計{reportType === 'expense' ? '支出' : '収入'}</span>
+                  <span className="text-lg font-bold text-gray-700 leading-tight">{formatCurrency(reportType === 'expense' ? totalExpense : totalIncome)}</span>
+                </div>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                    <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none" startAngle={90} endAngle={-270}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip itemStyle={{ color: '#374151', fontWeight: 'bold' }} formatter={(value) => formatCurrency(value)} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}/>
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={2} dataKey="value" stroke="none" startAngle={90} endAngle={-270}>
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip itemStyle={{ color: '#374151', fontWeight: 'bold' }} formatter={(value) => formatCurrency(value)} contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}/>
-                  <Legend 
-                    verticalAlign="bottom"
-                    content={() => {
-                      const sortedItems = [...chartData].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0));
-                      return (
-                        <div className="flex flex-wrap justify-center items-center gap-3 pt-4">
-                          {sortedItems.map((entry, index) => (
-                            <div key={`item-${index}`} className="flex items-center gap-1.5">
-                              <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: entry.color }} />
-                              <span className="text-sm font-bold text-gray-600">{entry.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <div className="flex flex-wrap justify-center items-center gap-3 pt-2">
+                {[...chartData].sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0)).map((entry, index) => (
+                  <div key={`item-${index}`} className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full shadow-sm" style={{ backgroundColor: entry.color }} />
+                    <span className="text-sm font-bold text-gray-600">{entry.name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="h-40 flex items-center justify-center text-gray-400 text-sm">データがありません</div>
