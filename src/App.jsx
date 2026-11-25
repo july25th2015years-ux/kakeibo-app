@@ -2272,6 +2272,7 @@ function InputScreen({
   const [type, setType] = useState(() => draft.type || 'expense');
   const [amount, setAmount] = useState(() => draft.amount || '');
   const [date, setDate] = useState(() => draft.date || today.toISOString().split('T')[0]);
+  const [viewDate, setViewDate] = useState(() => draft.date || today.toISOString().split('T')[0]);
   const [selectedParentId, setSelectedParentId] = useState(() => draft.selectedParentId || '');
   const [selectedSubId, setSelectedSubId] = useState(() => draft.selectedSubId || '');
   const [memo, setMemo] = useState(() => draft.memo || '');
@@ -2327,6 +2328,7 @@ function InputScreen({
   const handleDateChange = (e) => {
     const val = e.target.value;
     setDate(val);
+    if (val) setViewDate(val);
     saveDraftImmediate({ date: val });
   };
 
@@ -2382,7 +2384,10 @@ function InputScreen({
         if (saved.amount !== undefined) setAmount(saved.amount);
         if (saved.memo !== undefined) setMemo(saved.memo);
         if (saved.type !== undefined) setType(saved.type);
-        if (saved.date !== undefined) setDate(saved.date);
+        if (saved.date !== undefined) {
+          setDate(saved.date);
+          setViewDate(saved.date);
+        }
         if (saved.selectedParentId !== undefined) setSelectedParentId(saved.selectedParentId);
         if (saved.selectedSubId !== undefined) setSelectedSubId(saved.selectedSubId);
         if (saved.editingId !== undefined) setEditingId(saved.editingId);
@@ -2422,7 +2427,7 @@ function InputScreen({
   const availableParents = activeParentCategories.filter(c => c.type === type);
   const availableSubs = selectedParentId ? getActiveSubCategories(selectedParentId) : [];
 
-  const calDate = parseSafeDate(date);
+  const calDate = parseSafeDate(viewDate);
   const calYear = calDate.getFullYear();
   const calMonth = calDate.getMonth() + 1;
   const calendarDays = generateCalendar(calYear, calMonth);
@@ -2431,6 +2436,7 @@ function InputScreen({
     const d = new Date(calYear, calMonth - 1 + offset, 1);
     const newDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
     setDate(newDateStr);
+    setViewDate(newDateStr);
     saveDraftImmediate({ date: newDateStr });
   };
 
@@ -2439,6 +2445,7 @@ function InputScreen({
     setType(tx.type);
     setAmount(String(tx.amount));
     setDate(tx.date);
+    setViewDate(tx.date);
     setMemo(tx.memo || '');
     
     const pId = getParentId(tx.categoryId);
@@ -2483,6 +2490,9 @@ function InputScreen({
     const currentEditingId = editingId;
     const savedDate = date;
 
+    // カレンダーと記録リストは入力した日付の月を表示したままにする
+    setViewDate(savedDate);
+
     // 先にフォームと下書きをリセット
     resetInputForm();
 
@@ -2495,7 +2505,7 @@ function InputScreen({
         await setDoc(doc(db, `${getBasePath()}/transactions/${txId}`), txData);
       }
 
-      // 入力完了後に下部のリスト表示部分へスクロール
+      // 入力完了後に下部のリスト表示部分（登録した日付の位置）へスクロール
       const scrollToTarget = () => {
         const dateEl = document.getElementById(`tx-list-${savedDate}`);
         if (dateEl) {
@@ -2506,15 +2516,17 @@ function InputScreen({
       };
 
       setTimeout(() => {
-        const found = scrollToTarget();
-        if (!found) {
-          const sectionEl = document.getElementById('tx-records-section');
-          if (sectionEl) {
-            sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-          setTimeout(scrollToTarget, 200);
+        if (!scrollToTarget()) {
+          setTimeout(() => {
+            if (!scrollToTarget()) {
+              const sectionEl = document.getElementById('tx-records-section');
+              if (sectionEl) {
+                sectionEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }
+          }, 250);
         }
-      }, 100);
+      }, 120);
     } catch (err) {
       console.error("保存エラー", err);
       alert("保存に失敗しました");
@@ -2687,7 +2699,7 @@ function InputScreen({
             if (!dObj) return <div key={`empty-${idx}`} className="h-14"></div>;
             
             const dStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
-            const isSelected = dStr === date;
+            const isSelected = dStr === viewDate;
             const isToday = dStr === currentMonthStr + '-' + String(today.getDate()).padStart(2, '0');
             
             const dayTxs = transactions.filter(t => t.date === dStr);
